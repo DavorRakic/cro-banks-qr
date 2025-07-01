@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Private Payment QR Generator</title>
+          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+          <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+          <style>
+              body {
+                  background-color: #f0f2f5;
+                  font-family: 'Roboto', sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  min-height: 100vh;
+                  margin: 0;
+              }
+              .mobile-frame {
+                  width: 100%;
+                  max-width: 480px;
+                  background: #ffffff;
+                  border-radius: 36px;
+                  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+                  padding: 2.5rem 2rem;
+                  border: 8px solid #333;
+              }
+              .form-floating > .form-control {
+                  height: calc(3.5rem + 2px);
+                  padding: 1rem 0.75rem;
+                  border: 1px solid #ced4da;
+              }
+              .form-floating > .form-control:focus {
+                  border-color: #007bff;
+                  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+              }
+              .form-floating > label {
+                  padding: 1rem 0.75rem;
+              }
+              .btn-primary {
+                  background-color: #007bff;
+                  border-color: #007bff;
+                  font-weight: 500;
+                  padding: 0.75rem 1.5rem;
+              }
+              .modal-content {
+                  border-radius: 16px;
+              }
+              canvas {
+                  max-width: 100%;
+                  height: auto;
+              }
+         </style>
+     </head>
+     <body>
+         <div class="mobile-frame">
+             <div class="container">
+                 <h1 class="mb-4 text-center">Private Payment</h1>
+    
+                 <div class="row g-3">
+                     <div class="col-4"><div class="form-floating"><input type="text" class="form-control" id="field2" placeholder="Currency" value="EUR" maxlength="3"><label for="field2">Currency</label></div></div>
+                     <div class="col-8"><div class="form-floating"><input type="number" step="0.01" class="form-control" id="field3" placeholder="Amount" value="0.00"><label for="field3">Amount</label></div></div>
+                     <div class="col-12"><div class="form-floating"><input type="text" class="form-control" id="field7" placeholder="Recipient name" value="" maxlength="32"><label for="field7">Recipient Name</label></div></div>
+                     <div class="col-12"><div class="form-floating"><input type="text" class="form-control" id="field10" placeholder="Recipient IBAN" value="" maxlength="21"><label for="field10">Recepient IBAN</label></div></div>
+                     <div class="col-12"><div class="form-floating"><input type="text" class="form-control" id="field14" placeholder="Description" value="" maxlength="64"><label for="field14">Description</label></div></div>
+                 </div>
+    
+                 <div class="d-grid gap-2 mt-4">
+                    <button id="generate-btn" class="btn btn-primary">Generate Barcode</button>
+                 </div>
+             </div>
+         </div>
+
+         <!-- Hidden fields -->
+         <input type="hidden" id="field1" value="HRVHUB30">
+         <input type="hidden" id="field4" value="">
+         <input type="hidden" id="field5" value="">
+         <input type="hidden" id="field6" value="">
+         <input type="hidden" id="field8" value="">
+         <input type="hidden" id="field9" value="">
+         <input type="hidden" id="field11" value="HR00">
+         <input type="hidden" id="field12" value="">
+         <input type="hidden" id="field13" value="">
+
+         <!-- PDF Content -->
+         <div id="pdf-content" style="display: none; position: absolute; left: -9999px; width: 794px; height: 559px; background: white; color: black; font-family: 'Roboto', sans-serif; font-size: 20px; text-align: center; padding: 20px;">
+             <div style="font-size: 36px; font-weight: bold; color: darkgreen;">POZIV NA UPLATU</div>
+             <div id="pdf-field14" style="margin-top: 10px;"></div>
+             <div style="font-weight: bold; color: darkgreen; margin-top: 10px;">Primatelj: <span id="pdf-field7"></span></div>
+             <div style="margin-top: 10px;">Iznos €: <span id="pdf-field3"></span></div>
+             <div style="height: 15px;"></div>
+             <div><img id="pdf-barcode" src="" style="width: 302px;"></div>
+             <div style="height: 15px;"></div>
+             <div style="font-size: 17px;">1. Otvorite aplikaciju mobilnog bankarstva</div>
+             <div style="font-size: 17px; margin-top: 7px;">2. Skenirajte gornji kod u nalog za plaćanje</div>
+             <div style="font-size: 17px; margin-top: 7px;">3. Provjerite podatke i izvršite plaćanje</div>
+             <div style="height: 15px;"></div>
+             <div style="font-size: 13px; font-style: italic;">Postoji mogućnost naplate bankovne naknade</div>
+         </div>
+
+         <!-- Barcode Modal -->
+         <div class="modal fade" id="barcodeModal" tabindex="-1" aria-labelledby="barcodeModalLabel" aria-hidden="true">
+             <div class="modal-dialog modal-dialog-centered">
+                 <div class="modal-content">
+                     <div class="modal-header">
+                         <h5 class="modal-title" id="barcodeModalLabel">Generated Barcode</h5>
+                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                     </div>
+                     <div class="modal-body text-center">
+                         <canvas id="barcode-canvas"></canvas>
+                         <div id="error-message" class="alert alert-danger mt-3" style="display: none;"></div>
+                     </div>
+                     <div class="modal-footer d-flex justify-content-between">
+                        <div>
+                            <a id="download-btn" class="btn btn-primary">Download PNG</a>
+                            <a id="download-pdf-btn" class="btn btn-primary">Download PDF</a>
+                        </div>
+                         <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                     </div>
+                 </div>
+             </div>
+         </div>
+    
+         <!-- JS Libraries -->
+         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+         <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.0.4/dist/bwip-js-min.js"></script>
+    
+         <script>
+            // Basic localStorage to remember field values
+            window.addEventListener('load', () => {
+                for (let i = 1; i <= 14; i++) {
+                    const field = document.getElementById(`field`+i);
+                    if (field && field.type !== 'hidden') {
+                        const savedValue = localStorage.getItem(`field`+i);
+                        if (savedValue !== null) {
+                            field.value = savedValue;
+                        }
+                    }
+                }
+            });
+
+             document.getElementById('generate-btn').addEventListener('click', () => {
+                 const canvas = document.getElementById('barcode-canvas');
+                 const errorMessage = document.getElementById('error-message');
+                 const barcodeModal = new bootstrap.Modal(document.getElementById('barcodeModal'));
+                 
+                 // Reset UI state
+                 errorMessage.style.display = 'none';
+                 canvas.style.display = 'block'; // Make sure canvas is visible
+
+                 try {
+                     const fields = [];
+                     for (let i = 1; i <= 14; i++) {
+                        let field = document.getElementById(`field`+i);
+                        let value = ''; // Default to empty string if field is not found
+                        if (field) {
+                            value = field.value;
+                             if (i === 3) { // Format amount
+                                 const amount = parseFloat(value) || 0;
+                                 value = amount.toFixed(2);
+                                 field.value = value;
+                             }
+                             if (field.type !== 'hidden') {
+                                localStorage.setItem(`field`+i, value);
+                             }
+                        }
+                        fields.push(value);
+                     }
+                     
+                     const payload = fields.join('\n');
+
+                     bwipjs.toCanvas(canvas, {
+                         bcid: 'pdf417',
+                         text: payload,
+                         scale: 3,
+                         height: 10,
+                         includetext: false
+                     }, function(err) {
+                         if (err) {
+                             console.error("bwip-js error:", err);
+                             canvas.style.display = 'none';
+                             errorMessage.textContent = 'Error generating barcode: ' + err;
+                             errorMessage.style.display = 'block';
+                         }
+                     });
+
+                     barcodeModal.show();
+
+                 } catch (e) {
+                     console.error("Synchronous error:", e);
+                     canvas.style.display = 'none';
+                     errorMessage.textContent = 'Error setting up barcode generation: ' + e.message;
+                     errorMessage.style.display = 'block';
+                     barcodeModal.show();
+                 }
+             });
+    
+             document.getElementById('download-btn').addEventListener('click', () => {
+                 const canvas = document.getElementById('barcode-canvas');
+                 const link = document.createElement('a');
+                link.href = canvas.toDataURL('image/png');
+                link.download = 'payment-barcode.png';
+                link.click();
+            });
+
+            document.getElementById('download-pdf-btn').addEventListener('click', () => {
+                const canvas = document.getElementById('barcode-canvas');
+                const imgData = canvas.toDataURL('image/png');
+
+                document.getElementById('pdf-field3').innerText = document.getElementById('field3').value;
+                document.getElementById('pdf-field7').innerText = document.getElementById('field7').value;
+                document.getElementById('pdf-field14').innerText = document.getElementById('field14').value;
+                document.getElementById('pdf-barcode').src = imgData;
+
+                const pdfContent = document.getElementById('pdf-content');
+                pdfContent.style.display = 'block';
+
+                html2canvas(pdfContent, { scale: 3 }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF({
+                        orientation: 'landscape',
+                        unit: 'mm',
+                        format: 'a5'
+                    });
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    pdf.save('uplatnica.pdf');
+                    pdfContent.style.display = 'none';
+                });
+            });
+        </script>
+    </body>
+    </html>
